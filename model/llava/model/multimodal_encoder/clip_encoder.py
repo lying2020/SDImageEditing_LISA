@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from transformers import CLIPImageProcessor, CLIPVisionConfig, CLIPVisionModel
+from transformers import CLIPImageProcessor, CLIPVisionConfig
 
 
 class CLIPVisionTower(nn.Module):
@@ -19,6 +19,8 @@ class CLIPVisionTower(nn.Module):
             self.cfg_only = CLIPVisionConfig.from_pretrained(self.vision_tower_name)
 
     def load_model(self):
+        # Lazy import CLIPVisionModel to avoid bitsandbytes CUDA setup issues
+        from transformers import CLIPVisionModel
         self.image_processor = CLIPImageProcessor.from_pretrained(
             self.vision_tower_name
         )

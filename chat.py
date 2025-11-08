@@ -1,12 +1,50 @@
 import argparse
+
 import os
 import sys
+import warnings
+
+# CRITICAL: Set environment variables BEFORE any other imports
+# This prevents bitsandbytes CUDA setup errors during import
+os.environ["BITSANDBYTES_NOWELCOME"] = "1"
+warnings.filterwarnings("ignore", category=UserWarning, module="bitsandbytes.*")
+warnings.filterwarnings("ignore", message=".*CUDA.*")
+warnings.filterwarnings("ignore", message=".*libcudart.*")
 
 import cv2
 import numpy as np
 import torch
 import torch.nn.functional as F
-from transformers import AutoTokenizer, BitsAndBytesConfig, CLIPImageProcessor
+
+# Stub bitsandbytes module to prevent CUDA initialization errors
+# This must be done BEFORE importing transformers (which imports accelerate, which imports bitsandbytes)
+class BitsAndBytesStub:
+    """Stub for bitsandbytes to delay CUDA initialization"""
+    def __getattr__(self, name):
+        # Only import when actually accessed and needed
+        import warnings
+        warnings.filterwarnings("ignore", category=UserWarning, module="bitsandbytes.*")
+        try:
+            import bitsandbytes as bnb
+            return getattr(bnb, name)
+        except (RuntimeError, ImportError) as e:
+            if "CUDA" in str(e) or "libcudart" in str(e):
+                raise RuntimeError(
+                    "bitsandbytes CUDA setup failed. "
+                    "To fix: 1) Install CUDA libraries, 2) Set LD_LIBRARY_PATH, or 3) Disable quantization (--load_in_4bit=False --load_in_8bit=False)"
+                ) from e
+            raise
+
+# Install stub before any imports
+if "bitsandbytes" not in sys.modules:
+    sys.modules["bitsandbytes"] = BitsAndBytesStub()
+    # Also stub submodules that might be imported
+    sys.modules["bitsandbytes.nn"] = BitsAndBytesStub()
+    sys.modules["bitsandbytes.optim"] = BitsAndBytesStub()
+    sys.modules["bitsandbytes.cuda_setup"] = BitsAndBytesStub()
+
+
+from transformers import AutoTokenizer, CLIPImageProcessor
 
 from model.LISA import LISAForCausalLM
 from model.llava import conversation as conversation_lib
@@ -164,6 +202,8 @@ def main(args):
 
     kwargs = {"torch_dtype": torch_dtype}
     if args.load_in_4bit:
+        # Lazy import BitsAndBytesConfig to avoid bitsandbytes CUDA setup issues
+        from transformers import BitsAndBytesConfig
         kwargs.update(
             {
                 "torch_dtype": torch.half,
@@ -178,6 +218,8 @@ def main(args):
             }
         )
     elif args.load_in_8bit:
+        # Lazy import BitsAndBytesConfig to avoid bitsandbytes CUDA setup issues
+        from transformers import BitsAndBytesConfig
         kwargs.update(
             {
                 "torch_dtype": torch.half,

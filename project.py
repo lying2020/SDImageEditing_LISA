@@ -28,8 +28,8 @@ INPAINTING_2_MODEL_PATH = "/home/liying/Desktop/stable-diffusion-2-inpainting"
 STABLE_DIFFUSION_V1_5_MODEL_PATH = "/home/liying/Documents/stable-diffusion-v1-5"
 
 # LISA model path
-LISA_7B_MODEL_PATH = "/home/liying/Desktop/IMAGE_EDITE-CVPR-2025/LISA-7B-v1"
-LISA_13B_MODEL_PATH = "/home/liying/Desktop/IMAGE_EDITE-CVPR-2025/LISA-13B-llama2-v1"
+LISA_7B_MODEL_PATH = "/home/liying/Documents/LISA-7B-v1"
+LISA_13B_MODEL_PATH = "/home/liying/Documents/LISA-13B-llama2-v1"
 
 
 # dataset path
