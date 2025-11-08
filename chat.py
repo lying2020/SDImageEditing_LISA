@@ -16,33 +16,27 @@ from utils.utils import (DEFAULT_IM_END_TOKEN, DEFAULT_IM_START_TOKEN,
                          DEFAULT_IMAGE_TOKEN, IMAGE_TOKEN_INDEX)
 
 
+from utils.utils import EditingJsonDataset
+
+import project
+from project import LISA_7B_MODEL_PATH, VIS_OUTPUT_DIR, INPUT_IMAGES_DIR, INPUT_IMAGES_JSON_FILE
+
 def parse_args(args):
     parser = argparse.ArgumentParser(description="LISA chat")
-    parser.add_argument("--version", default="xinlai/LISA-13B-llama2-v1")
-    parser.add_argument("--vis_save_path", default="./vis_output", type=str)
-    parser.add_argument(
-        "--precision",
-        default="bf16",
-        type=str,
-        choices=["fp32", "bf16", "fp16"],
-        help="precision for inference",
-    )
+    parser.add_argument("--version", default=LISA_7B_MODEL_PATH)
+    parser.add_argument("--input_images_dir", default=INPUT_IMAGES_DIR, help="Directory to load input images")
+    parser.add_argument("--input_images_json_file", default=INPUT_IMAGES_JSON_FILE, help="JSON file to load input images")
+    parser.add_argument("--vis_save_path", default=VIS_OUTPUT_DIR, help="Directory to save visualization results")
+    parser.add_argument("--precision", default="fp16", type=str, choices=["fp32", "bf16", "fp16"], help="precision for inference")
     parser.add_argument("--image_size", default=1024, type=int, help="image size")
     parser.add_argument("--model_max_length", default=512, type=int)
     parser.add_argument("--lora_r", default=8, type=int)
-    parser.add_argument(
-        "--vision-tower", default="openai/clip-vit-large-patch14", type=str
-    )
+    parser.add_argument("--vision-tower", default="openai/clip-vit-large-patch14", type=str)
     parser.add_argument("--local-rank", default=0, type=int, help="node rank")
     parser.add_argument("--load_in_8bit", action="store_true", default=False)
-    parser.add_argument("--load_in_4bit", action="store_true", default=False)
+    parser.add_argument("--load_in_4bit", action="store_true", default=True)
     parser.add_argument("--use_mm_start_end", action="store_true", default=True)
-    parser.add_argument(
-        "--conv_type",
-        default="llava_v1",
-        type=str,
-        choices=["llava_v1", "llava_llama_2"],
-    )
+    parser.add_argument("--conv_type", default="llava_v1", type=str, choices=["llava_v1", "llava_llama_2"])
     return parser.parse_args(args)
 
 
@@ -63,18 +57,101 @@ def preprocess(
     return x
 
 
+def chat(args, model, clip_image_processor, transform, tokenizer, image_path, prompt):
+    conv = conversation_lib.conv_templates[args.conv_type].copy()
+    conv.messages = []
+
+    prompt = DEFAULT_IMAGE_TOKEN + "\n" + prompt
+    if args.use_mm_start_end:
+        replace_token = (
+            DEFAULT_IM_START_TOKEN + DEFAULT_IMAGE_TOKEN + DEFAULT_IM_END_TOKEN
+        )
+        prompt = prompt.replace(DEFAULT_IMAGE_TOKEN, replace_token)
+
+    conv.append_message(conv.roles[0], prompt)
+    conv.append_message(conv.roles[1], "")
+    prompt = conv.get_prompt()
+
+    if not os.path.exists(image_path):
+        print("File not found in {}".format(image_path))
+        return
+
+    image_np = cv2.imread(image_path)
+    image_np = cv2.cvtColor(image_np, cv2.COLOR_BGR2RGB)
+    original_size_list = [image_np.shape[:2]]
+
+    image_clip = (
+        clip_image_processor.preprocess(image_np, return_tensors="pt")[
+            "pixel_values"
+        ][0]
+        .unsqueeze(0)
+        .cuda()
+    )
+    if args.precision == "bf16":
+        image_clip = image_clip.bfloat16()
+    elif args.precision == "fp16":
+        image_clip = image_clip.half()
+    else:
+        image_clip = image_clip.float()
+
+    image = transform.apply_image(image_np)
+    resize_list = [image.shape[:2]]
+
+    image = (
+        preprocess(torch.from_numpy(image).permute(2, 0, 1).contiguous())
+        .unsqueeze(0)
+        .cuda()
+    )
+    if args.precision == "bf16":
+        image = image.bfloat16()
+    elif args.precision == "fp16":
+        image = image.half()
+    else:
+        image = image.float()
+
+    input_ids = tokenizer_image_token(prompt, tokenizer, return_tensors="pt")
+    input_ids = input_ids.unsqueeze(0).cuda()
+
+    output_ids, pred_masks = model.evaluate(image_clip, image, input_ids, resize_list, original_size_list, max_new_tokens=512, tokenizer=tokenizer)
+    output_ids = output_ids[0][output_ids[0] != IMAGE_TOKEN_INDEX]
+
+    text_output = tokenizer.decode(output_ids, skip_special_tokens=False)
+    text_output = text_output.replace("\n", "").replace("  ", " ")
+    print("text_output: ", text_output)
+
+    for i, pred_mask in enumerate(pred_masks):
+        if pred_mask.shape[0] == 0:
+            continue
+
+        pred_mask = pred_mask.detach().cpu().numpy()[0]
+        pred_mask = pred_mask > 0
+
+        save_path_mask = "{}/{}_mask_{}.jpg".format(
+            args.vis_save_path, image_path.split("/")[-1].split(".")[0], i
+        )
+        cv2.imwrite(save_path_mask, pred_mask * 100)
+        print("{} has been saved.".format(save_path_mask))
+
+        save_path_masked_img = "{}/{}_masked_img_{}.jpg".format(
+            args.vis_save_path, image_path.split("/")[-1].split(".")[0], i
+        )
+        save_img = image_np.copy()
+        save_img[pred_mask] = (
+            image_np * 0.5
+            + pred_mask[:, :, None].astype(np.uint8) * np.array([255, 0, 0]) * 0.5
+        )[pred_mask]
+        save_img = cv2.cvtColor(save_img, cv2.COLOR_RGB2BGR)
+        cv2.imwrite(save_path_masked_img, save_img)
+        print("{} has been saved.".format(save_path_masked_img))
+
+    return text_output, save_path_mask, save_path_masked_img
+
 def main(args):
     args = parse_args(args)
     os.makedirs(args.vis_save_path, exist_ok=True)
 
     # Create model
-    tokenizer = AutoTokenizer.from_pretrained(
-        args.version,
-        cache_dir=None,
-        model_max_length=args.model_max_length,
-        padding_side="right",
-        use_fast=False,
-    )
+    tokenizer = AutoTokenizer.from_pretrained(args.version, cache_dir=None, model_max_length=args.model_max_length, padding_side="right", use_fast=False)
     tokenizer.pad_token = tokenizer.unk_token
     args.seg_token_idx = tokenizer("[SEG]", add_special_tokens=False).input_ids[0]
 
@@ -132,12 +209,7 @@ def main(args):
         model.model.vision_tower = None
         import deepspeed
 
-        model_engine = deepspeed.init_inference(
-            model=model,
-            dtype=torch.half,
-            replace_with_kernel_inject=True,
-            replace_method="auto",
-        )
+        model_engine = deepspeed.init_inference(model=model, dtype=torch.half, replace_with_kernel_inject=True, replace_method="auto")
         model = model_engine.module
         model.model.vision_tower = vision_tower.half().cuda()
     elif args.precision == "fp32":
@@ -151,102 +223,18 @@ def main(args):
 
     model.eval()
 
-    while True:
-        conv = conversation_lib.conv_templates[args.conv_type].copy()
-        conv.messages = []
+    # Set required args for EditingJsonDataset
+    args.image_dir_path = args.input_images_dir
+    args.json_file = args.input_images_json_file
+    dataset = EditingJsonDataset(args)
 
-        prompt = input("Please input your prompt: ")
-        prompt = DEFAULT_IMAGE_TOKEN + "\n" + prompt
-        if args.use_mm_start_end:
-            replace_token = (
-                DEFAULT_IM_START_TOKEN + DEFAULT_IMAGE_TOKEN + DEFAULT_IM_END_TOKEN
-            )
-            prompt = prompt.replace(DEFAULT_IMAGE_TOKEN, replace_token)
-
-        conv.append_message(conv.roles[0], prompt)
-        conv.append_message(conv.roles[1], "")
-        prompt = conv.get_prompt()
-
-        image_path = input("Please input the image path: ")
-        if not os.path.exists(image_path):
-            print("File not found in {}".format(image_path))
-            continue
-
-        image_np = cv2.imread(image_path)
-        image_np = cv2.cvtColor(image_np, cv2.COLOR_BGR2RGB)
-        original_size_list = [image_np.shape[:2]]
-
-        image_clip = (
-            clip_image_processor.preprocess(image_np, return_tensors="pt")[
-                "pixel_values"
-            ][0]
-            .unsqueeze(0)
-            .cuda()
-        )
-        if args.precision == "bf16":
-            image_clip = image_clip.bfloat16()
-        elif args.precision == "fp16":
-            image_clip = image_clip.half()
-        else:
-            image_clip = image_clip.float()
-
-        image = transform.apply_image(image_np)
-        resize_list = [image.shape[:2]]
-
-        image = (
-            preprocess(torch.from_numpy(image).permute(2, 0, 1).contiguous())
-            .unsqueeze(0)
-            .cuda()
-        )
-        if args.precision == "bf16":
-            image = image.bfloat16()
-        elif args.precision == "fp16":
-            image = image.half()
-        else:
-            image = image.float()
-
-        input_ids = tokenizer_image_token(prompt, tokenizer, return_tensors="pt")
-        input_ids = input_ids.unsqueeze(0).cuda()
-
-        output_ids, pred_masks = model.evaluate(
-            image_clip,
-            image,
-            input_ids,
-            resize_list,
-            original_size_list,
-            max_new_tokens=512,
-            tokenizer=tokenizer,
-        )
-        output_ids = output_ids[0][output_ids[0] != IMAGE_TOKEN_INDEX]
-
-        text_output = tokenizer.decode(output_ids, skip_special_tokens=False)
-        text_output = text_output.replace("\n", "").replace("  ", " ")
-        print("text_output: ", text_output)
-
-        for i, pred_mask in enumerate(pred_masks):
-            if pred_mask.shape[0] == 0:
-                continue
-
-            pred_mask = pred_mask.detach().cpu().numpy()[0]
-            pred_mask = pred_mask > 0
-
-            save_path = "{}/{}_mask_{}.jpg".format(
-                args.vis_save_path, image_path.split("/")[-1].split(".")[0], i
-            )
-            cv2.imwrite(save_path, pred_mask * 100)
-            print("{} has been saved.".format(save_path))
-
-            save_path = "{}/{}_masked_img_{}.jpg".format(
-                args.vis_save_path, image_path.split("/")[-1].split(".")[0], i
-            )
-            save_img = image_np.copy()
-            save_img[pred_mask] = (
-                image_np * 0.5
-                + pred_mask[:, :, None].astype(np.uint8) * np.array([255, 0, 0]) * 0.5
-            )[pred_mask]
-            save_img = cv2.cvtColor(save_img, cv2.COLOR_RGB2BGR)
-            cv2.imwrite(save_path, save_img)
-            print("{} has been saved.".format(save_path))
+    for idx, (image, original_prompt, editing_prompt) in enumerate(dataset):
+        # Get image path from dataset
+        image_path = os.path.join(args.input_images_dir, dataset.image_files[idx])
+        text_output, save_path_mask, save_path_masked_img = chat(args, model, clip_image_processor, transform, tokenizer, image_path, original_prompt)
+        print(f"[{idx+1}/{len(dataset)}] text_output: {text_output}")
+        print(f"[{idx+1}/{len(dataset)}] save_path_mask: {save_path_mask}")
+        print(f"[{idx+1}/{len(dataset)}] save_path_masked_img: {save_path_masked_img}")
 
 
 if __name__ == "__main__":

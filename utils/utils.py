@@ -1,8 +1,16 @@
 from enum import Enum
+import os
 
 import numpy as np
 import torch
 import torch.distributed as dist
+from torchvision import datasets, transforms
+import PIL
+from PIL import Image
+from torch.utils.data import Dataset, DataLoader
+import json, os
+
+
 
 IGNORE_INDEX = -100
 IMAGE_TOKEN_INDEX = -200
@@ -47,6 +55,27 @@ class Summary(Enum):
     AVERAGE = 1
     SUM = 2
     COUNT = 3
+
+
+class EditingJsonDataset(Dataset):
+    def __init__(self, args, repeats=1):
+        self.image_dir = args.image_dir_path
+        with open(args.json_file, 'r') as f:
+            self.image_prompt = json.load(f)
+            self.image_files = list(self.image_prompt.keys())*repeats
+        f.close()
+
+    def __len__(self):
+        return len(self.image_files)
+
+    def __getitem__(self, idx):
+        img_name = os.path.join(self.image_dir, self.image_files[idx])
+        image = Image.open(img_name)
+
+        original_prompt, editing_prompt = self.image_prompt[self.image_files[idx]][0], self.image_prompt[self.image_files[idx]][1]
+
+        return image, original_prompt, editing_prompt
+
 
 
 class AverageMeter(object):
