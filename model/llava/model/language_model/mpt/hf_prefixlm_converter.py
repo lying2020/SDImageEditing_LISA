@@ -15,20 +15,83 @@ import torch
 from transformers.models.bloom.modeling_bloom import (
     BaseModelOutputWithPastAndCrossAttentions, BloomForCausalLM, BloomModel,
     CausalLMOutputWithCrossAttentions, CrossEntropyLoss)
-from transformers.models.bloom.modeling_bloom import \
-    _expand_mask as _expand_mask_bloom
-from transformers.models.bloom.modeling_bloom import \
-    _make_causal_mask as _make_causal_mask_bloom
+# Try to import from bloom, use local implementation if not available
+try:
+    from transformers.models.bloom.modeling_bloom import _expand_mask as _expand_mask_bloom
+    from transformers.models.bloom.modeling_bloom import _make_causal_mask as _make_causal_mask_bloom
+except ImportError:
+    # Local implementation for transformers 4.57.1+
+    def _expand_mask_bloom(mask, dtype, tgt_len=None):
+        bsz, src_len = mask.size()
+        tgt_len = tgt_len if tgt_len is not None else src_len
+        expanded_mask = mask[:, None, None, :].expand(bsz, 1, tgt_len, src_len).to(dtype)
+        inverted_mask = 1.0 - expanded_mask
+        return inverted_mask.masked_fill(inverted_mask.to(torch.bool), torch.finfo(dtype).min)
+    def _make_causal_mask_bloom(input_ids_shape, dtype, device, past_key_values_length=0):
+        bsz, tgt_len = input_ids_shape
+        mask = torch.full((tgt_len, tgt_len), torch.finfo(dtype).min, device=device)
+        mask_cond = torch.arange(mask.size(-1), device=device)
+        mask.masked_fill_(mask_cond < (mask_cond + 1).view(mask.size(-1), 1), 0)
+        mask = mask.to(dtype)
+        if past_key_values_length > 0:
+            mask = torch.cat([torch.zeros(tgt_len, past_key_values_length, dtype=dtype, device=device), mask], dim=-1)
+        return mask[None, None, :, :].expand(bsz, 1, -1, -1)
 from transformers.models.bloom.modeling_bloom import logging
 from transformers.models.gpt2.modeling_gpt2 import GPT2LMHeadModel
 from transformers.models.gpt_neo.modeling_gpt_neo import GPTNeoForCausalLM
 from transformers.models.gpt_neox.modeling_gpt_neox import GPTNeoXForCausalLM
 from transformers.models.gptj.modeling_gptj import GPTJForCausalLM
 from transformers.models.opt.modeling_opt import OPTForCausalLM
-from transformers.models.opt.modeling_opt import \
-    _expand_mask as _expand_mask_opt
-from transformers.models.opt.modeling_opt import \
-    _make_causal_mask as _make_causal_mask_opt
+# Local implementation for _expand_mask and _make_causal_mask (transformers 4.57.1+ removed these)
+try:
+    from transformers.models.opt.modeling_opt import _expand_mask as _expand_mask_opt
+    from transformers.models.opt.modeling_opt import _make_causal_mask as _make_causal_mask_opt
+except ImportError:
+    # Use local implementation
+    import torch
+    def _expand_mask_opt(mask: torch.Tensor, dtype: torch.dtype, tgt_len: int = None):
+        bsz, src_len = mask.size()
+        tgt_len = tgt_len if tgt_len is not None else src_len
+        expanded_mask = mask[:, None, None, :].expand(bsz, 1, tgt_len, src_len).to(dtype)
+        inverted_mask = 1.0 - expanded_mask
+        return inverted_mask.masked_fill(inverted_mask.to(torch.bool), torch.finfo(dtype).min)
+    def _make_causal_mask_opt(input_ids_shape: torch.Size, dtype: torch.dtype, device: torch.device, past_key_values_length: int = 0):
+        bsz, tgt_len = input_ids_shape
+        mask = torch.full((tgt_len, tgt_len), torch.finfo(dtype).min, device=device)
+        mask_cond = torch.arange(mask.size(-1), device=device)
+        mask.masked_fill_(mask_cond < (mask_cond + 1).view(mask.size(-1), 1), 0)
+        mask = mask.to(dtype)
+        if past_key_values_length > 0:
+            mask = torch.cat([torch.zeros(tgt_len, past_key_values_length, dtype=dtype, device=device), mask], dim=-1)
+        return mask[None, None, :, :].expand(bsz, 1, -1, -1)
+
+
+# Implementation of _expand_mask and _make_causal_mask for transformers 4.57.1+
+import torch
+
+def _expand_mask_impl(mask: torch.Tensor, dtype: torch.dtype, tgt_len: int = None):
+    """Expand attention mask from [bsz, seq_len] to [bsz, 1, tgt_len, src_len]."""
+    bsz, src_len = mask.size()
+    tgt_len = tgt_len if tgt_len is not None else src_len
+    expanded_mask = mask[:, None, None, :].expand(bsz, 1, tgt_len, src_len).to(dtype)
+    inverted_mask = 1.0 - expanded_mask
+    return inverted_mask.masked_fill(inverted_mask.to(torch.bool), torch.finfo(dtype).min)
+
+def _make_causal_mask_impl(input_ids_shape: torch.Size, dtype: torch.dtype, device: torch.device, past_key_values_length: int = 0):
+    """Make causal mask used for bi-directional self-attention."""
+    bsz, tgt_len = input_ids_shape
+    mask = torch.full((tgt_len, tgt_len), torch.finfo(dtype).min, device=device)
+    mask_cond = torch.arange(mask.size(-1), device=device)
+    mask.masked_fill_(mask_cond < (mask_cond + 1).view(mask.size(-1), 1), 0)
+    mask = mask.to(dtype)
+    if past_key_values_length > 0:
+        mask = torch.cat([torch.zeros(tgt_len, past_key_values_length, dtype=dtype, device=device), mask], dim=-1)
+    return mask[None, None, :, :].expand(bsz, 1, -1, -1)
+
+# Use local implementation
+_expand_mask_opt = _expand_mask_impl
+_make_causal_mask_opt = _make_causal_mask_impl
+
 
 logger = logging.get_logger(__name__)
 _SUPPORTED_GPT_MODELS = (

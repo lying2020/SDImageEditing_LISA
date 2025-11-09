@@ -163,5 +163,13 @@ class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
         return model_inputs
 
 
-AutoConfig.register("llava", LlavaConfig)
+# Try to register, skip if already registered
+try:
+    AutoConfig.register("llava", LlavaConfig)
+except ValueError as e:
+    if "already used" in str(e):
+        # transformers already has llava, skip registration
+        pass
+    else:
+        raise
 AutoModelForCausalLM.register(LlavaConfig, LlavaLlamaForCausalLM)

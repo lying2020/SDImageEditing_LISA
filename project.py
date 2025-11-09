@@ -36,17 +36,7 @@ LISA_13B_MODEL_PATH = "/home/liying/Documents/LISA-13B-llama2-v1"
 CHECKPOINTS_DIR = os.path.join(current_dir, "checkpoints")
 os.makedirs(CHECKPOINTS_DIR, exist_ok=True)
 
-DATASETS_DIR = os.path.join(current_dir, "datasets")
-os.makedirs(DATASETS_DIR, exist_ok=True)
-
-IMAGES_DIR = os.path.join(DATASETS_DIR, "images")
-os.makedirs(IMAGES_DIR, exist_ok=True)
-
-IMAGES_JSON_FILE = os.path.join(DATASETS_DIR, "images.json")
-if not os.path.exists(IMAGES_JSON_FILE):
-    raise FileNotFoundError(f"Images JSON file not found at {IMAGES_JSON_FILE}")
-
-INPUT_DIR = os.path.join(DATASETS_DIR, "input")
+INPUT_DIR = os.path.join(current_dir, "input")
 os.makedirs(INPUT_DIR, exist_ok=True)
 
 INPUT_IMAGES_DIR = os.path.join(INPUT_DIR, "images")
@@ -60,7 +50,7 @@ if not os.path.exists(INPUT_IMAGES_JSON_FILE):
 OUTPUT_DIR = os.path.join(current_dir, "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-VIS_OUTPUT_DIR = os.path.join(OUTPUT_DIR, "vis_output")
+VIS_OUTPUT_DIR = os.path.join(OUTPUT_DIR, "vis_new")
 os.makedirs(VIS_OUTPUT_DIR, exist_ok=True)
 
 EDITING_RESULTS_DIR = os.path.join(OUTPUT_DIR, "editing_results")

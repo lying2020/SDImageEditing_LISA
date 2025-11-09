@@ -1,51 +1,29 @@
 import argparse
-
 import os
+# Fix Qt platform plugin issue for OpenCV
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+# Auto-fix CUDA library path for bitsandbytes
+torch_lib = os.path.expanduser("~/.local/lib/python3.10/site-packages/torch/lib")
+if os.path.exists(torch_lib):
+    current_ld_path = os.environ.get("LD_LIBRARY_PATH", "")
+    if torch_lib not in current_ld_path:
+        os.environ["LD_LIBRARY_PATH"] = f"{torch_lib}:{current_ld_path}"
 import sys
 import warnings
-
+# Set environment to suppress bitsandbytes warnings
+os.environ.setdefault("BITSANDBYTES_NOWELCOME", "1")
 # CRITICAL: Set environment variables BEFORE any other imports
 # This prevents bitsandbytes CUDA setup errors during import
 os.environ["BITSANDBYTES_NOWELCOME"] = "1"
 warnings.filterwarnings("ignore", category=UserWarning, module="bitsandbytes.*")
 warnings.filterwarnings("ignore", message=".*CUDA.*")
 warnings.filterwarnings("ignore", message=".*libcudart.*")
-
 import cv2
 import numpy as np
 import torch
 import torch.nn.functional as F
-
-# Stub bitsandbytes module to prevent CUDA initialization errors
 # This must be done BEFORE importing transformers (which imports accelerate, which imports bitsandbytes)
-class BitsAndBytesStub:
-    """Stub for bitsandbytes to delay CUDA initialization"""
-    def __getattr__(self, name):
-        # Only import when actually accessed and needed
-        import warnings
-        warnings.filterwarnings("ignore", category=UserWarning, module="bitsandbytes.*")
-        try:
-            import bitsandbytes as bnb
-            return getattr(bnb, name)
-        except (RuntimeError, ImportError) as e:
-            if "CUDA" in str(e) or "libcudart" in str(e):
-                raise RuntimeError(
-                    "bitsandbytes CUDA setup failed. "
-                    "To fix: 1) Install CUDA libraries, 2) Set LD_LIBRARY_PATH, or 3) Disable quantization (--load_in_4bit=False --load_in_8bit=False)"
-                ) from e
-            raise
-
-# Install stub before any imports
-if "bitsandbytes" not in sys.modules:
-    sys.modules["bitsandbytes"] = BitsAndBytesStub()
-    # Also stub submodules that might be imported
-    sys.modules["bitsandbytes.nn"] = BitsAndBytesStub()
-    sys.modules["bitsandbytes.optim"] = BitsAndBytesStub()
-    sys.modules["bitsandbytes.cuda_setup"] = BitsAndBytesStub()
-
-
 from transformers import AutoTokenizer, CLIPImageProcessor
-
 from model.LISA import LISAForCausalLM
 from model.llava import conversation as conversation_lib
 from model.llava.mm_utils import tokenizer_image_token
@@ -53,29 +31,29 @@ from model.segment_anything.utils.transforms import ResizeLongestSide
 from utils.utils import (DEFAULT_IM_END_TOKEN, DEFAULT_IM_START_TOKEN,
                          DEFAULT_IMAGE_TOKEN, IMAGE_TOKEN_INDEX)
 
-
 from utils.utils import EditingJsonDataset
-
 import project
-from project import LISA_7B_MODEL_PATH, VIS_OUTPUT_DIR, INPUT_IMAGES_DIR, INPUT_IMAGES_JSON_FILE
+from project import LISA_7B_MODEL_PATH, LISA_13B_MODEL_PATH, VIS_OUTPUT_DIR, INPUT_IMAGES_DIR, INPUT_IMAGES_JSON_FILE
 
-def parse_args(args):
+
+def parse_args():
     parser = argparse.ArgumentParser(description="LISA chat")
-    parser.add_argument("--version", default=LISA_7B_MODEL_PATH)
+    parser.add_argument("--version", default=LISA_13B_MODEL_PATH)
     parser.add_argument("--input_images_dir", default=INPUT_IMAGES_DIR, help="Directory to load input images")
     parser.add_argument("--input_images_json_file", default=INPUT_IMAGES_JSON_FILE, help="JSON file to load input images")
     parser.add_argument("--vis_save_path", default=VIS_OUTPUT_DIR, help="Directory to save visualization results")
-    parser.add_argument("--precision", default="fp16", type=str, choices=["fp32", "bf16", "fp16"], help="precision for inference")
+    parser.add_argument("--precision", default="bf16", type=str, choices=["fp32", "bf16", "fp16"], help="precision for inference")
     parser.add_argument("--image_size", default=1024, type=int, help="image size")
     parser.add_argument("--model_max_length", default=512, type=int)
     parser.add_argument("--lora_r", default=8, type=int)
     parser.add_argument("--vision-tower", default="openai/clip-vit-large-patch14", type=str)
     parser.add_argument("--local-rank", default=0, type=int, help="node rank")
     parser.add_argument("--load_in_8bit", action="store_true", default=False)
-    parser.add_argument("--load_in_4bit", action="store_true", default=True)
+    parser.add_argument("--load_in_4bit", action="store_true", default=False)
     parser.add_argument("--use_mm_start_end", action="store_true", default=True)
     parser.add_argument("--conv_type", default="llava_v1", type=str, choices=["llava_v1", "llava_llama_2"])
-    return parser.parse_args(args)
+    args = parser.parse_args()
+    return args
 
 
 def preprocess(
@@ -163,7 +141,6 @@ def chat(args, model, clip_image_processor, transform, tokenizer, image_path, pr
 
         pred_mask = pred_mask.detach().cpu().numpy()[0]
         pred_mask = pred_mask > 0
-
         save_path_mask = "{}/{}_mask_{}.jpg".format(
             args.vis_save_path, image_path.split("/")[-1].split(".")[0], i
         )
@@ -185,14 +162,12 @@ def chat(args, model, clip_image_processor, transform, tokenizer, image_path, pr
     return text_output, save_path_mask, save_path_masked_img
 
 def main(args):
-    args = parse_args(args)
     os.makedirs(args.vis_save_path, exist_ok=True)
 
     # Create model
     tokenizer = AutoTokenizer.from_pretrained(args.version, cache_dir=None, model_max_length=args.model_max_length, padding_side="right", use_fast=False)
     tokenizer.pad_token = tokenizer.unk_token
     args.seg_token_idx = tokenizer("[SEG]", add_special_tokens=False).input_ids[0]
-
 
     torch_dtype = torch.float32
     if args.precision == "bf16":
@@ -237,47 +212,77 @@ def main(args):
     model.config.eos_token_id = tokenizer.eos_token_id
     model.config.bos_token_id = tokenizer.bos_token_id
     model.config.pad_token_id = tokenizer.pad_token_id
-
     model.get_model().initialize_vision_modules(model.get_model().config)
     vision_tower = model.get_model().get_vision_tower()
     vision_tower.to(dtype=torch_dtype)
 
     if args.precision == "bf16":
         model = model.bfloat16().cuda()
+        # Debug: Check if model is on GPU
+        print("=" * 60)
+        print("Model Device Check")
+        print("=" * 60)
+        try:
+            model_device = next(model.parameters()).device
+            print(f"Model device: {model_device}")
+            if model_device.type == "cuda":
+                gpu_mem = torch.cuda.memory_allocated() / 1024**3
+                print(f"✅ Model is on GPU!")
+                print(f"GPU memory used: {gpu_mem:.2f} GB")
+            else:
+                print(f"❌ WARNING: Model is on {model_device}, not GPU!")
+                print("This will be VERY slow. Check CUDA setup.")
+        except Exception as e:
+            print(f"Error checking model device: {e}")
+        print("=" * 60)
     elif (
         args.precision == "fp16" and (not args.load_in_4bit) and (not args.load_in_8bit)
     ):
         vision_tower = model.get_model().get_vision_tower()
         model.model.vision_tower = None
         import deepspeed
-
         model_engine = deepspeed.init_inference(model=model, dtype=torch.half, replace_with_kernel_inject=True, replace_method="auto")
         model = model_engine.module
         model.model.vision_tower = vision_tower.half().cuda()
     elif args.precision == "fp32":
         model = model.float().cuda()
 
+    # Debug: Check if model is on GPU
+    print("=" * 60)
+    print("Model Device Check")
+    print("=" * 60)
+    try:
+        model_device = next(model.parameters()).device
+        print(f"Model device: {model_device}")
+        if model_device.type == "cuda":
+            gpu_mem = torch.cuda.memory_allocated() / 1024**3
+            print(f"✅ Model is on GPU!")
+            print(f"GPU memory used: {gpu_mem:.2f} GB")
+        else:
+            print(f"❌ WARNING: Model is on {model_device}, not GPU!")
+            print("This will be VERY slow. Check CUDA setup.")
+    except Exception as e:
+        print(f"Error checking model device: {e}")
+
+    print("=" * 60)
     vision_tower = model.get_model().get_vision_tower()
     vision_tower.to(device=args.local_rank)
-
     clip_image_processor = CLIPImageProcessor.from_pretrained(model.config.vision_tower)
     transform = ResizeLongestSide(args.image_size)
-
     model.eval()
 
     # Set required args for EditingJsonDataset
     args.image_dir_path = args.input_images_dir
     args.json_file = args.input_images_json_file
     dataset = EditingJsonDataset(args)
-
     for idx, (image, original_prompt, editing_prompt) in enumerate(dataset):
         # Get image path from dataset
         image_path = os.path.join(args.input_images_dir, dataset.image_files[idx])
         text_output, save_path_mask, save_path_masked_img = chat(args, model, clip_image_processor, transform, tokenizer, image_path, original_prompt)
-        print(f"[{idx+1}/{len(dataset)}] text_output: {text_output}")
+        print(f"\n[{idx+1}/{len(dataset)}] text_output: {text_output}")
         print(f"[{idx+1}/{len(dataset)}] save_path_mask: {save_path_mask}")
         print(f"[{idx+1}/{len(dataset)}] save_path_masked_img: {save_path_masked_img}")
 
-
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    args = parse_args()
+    main(args)
