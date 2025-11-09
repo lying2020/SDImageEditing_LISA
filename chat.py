@@ -1,5 +1,6 @@
 import argparse
 import os
+from tkinter import N
 # Fix Qt platform plugin issue for OpenCV
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # Auto-fix CUDA library path for bitsandbytes
@@ -71,8 +72,7 @@ def preprocess(
     x = F.pad(x, (0, padw, 0, padh))
     return x
 
-
-def chat(args, model, clip_image_processor, transform, tokenizer, image_path, prompt):
+def chat(args, model, clip_image_processor, transform, tokenizer, image_path, prompt, save_path_mask=None, save_path_masked_img=None):
     conv = conversation_lib.conv_templates[args.conv_type].copy()
     conv.messages = []
 
@@ -140,15 +140,13 @@ def chat(args, model, clip_image_processor, transform, tokenizer, image_path, pr
 
         pred_mask = pred_mask.detach().cpu().numpy()[0]
         pred_mask = pred_mask > 0
-        save_path_mask = "{}/{}_mask_{}.jpg".format(
-            args.vis_save_path, image_path.split("/")[-1].split(".")[0], i
-        )
+        if save_path_mask is None:
+            save_path_mask = "{}/{}_mask_{}.jpg".format(args.vis_save_path, image_path.split("/")[-1].split(".")[0], i)
         cv2.imwrite(save_path_mask, pred_mask * 100)
         print("{} has been saved.".format(save_path_mask))
 
-        save_path_masked_img = "{}/{}_masked_img_{}.jpg".format(
-            args.vis_save_path, image_path.split("/")[-1].split(".")[0], i
-        )
+        if save_path_masked_img is None:
+            save_path_masked_img = "{}/{}_masked_img_{}.jpg".format(args.vis_save_path, image_path.split("/")[-1].split(".")[0], i)
         save_img = image_np.copy()
         save_img[pred_mask] = (
             image_np * 0.5
@@ -158,7 +156,7 @@ def chat(args, model, clip_image_processor, transform, tokenizer, image_path, pr
         cv2.imwrite(save_path_masked_img, save_img)
         print("{} has been saved.".format(save_path_masked_img))
 
-    return text_output, save_path_mask, save_path_masked_img
+    return text_output
 
 def main(args):
 
@@ -275,13 +273,14 @@ def main(args):
 
     # Set required args for EditingJsonDataset
     dataset = EditingJsonDataset(args.input_images_json_file)
-    for idx, (image, original_prompt, editing_prompt) in enumerate(dataset):
-        # Get image path from dataset
-        image_path = os.path.join(dataset.image_dir, dataset.image_files[idx])
-        text_output, save_path_mask, save_path_masked_img = chat(args, model, clip_image_processor, transform, tokenizer, image_path, original_prompt)
-        print(f"\n[{idx+1}/{len(dataset)}] text_output: {text_output}")
-        print(f"[{idx+1}/{len(dataset)}] save_path_mask: {save_path_mask}")
-        print(f"[{idx+1}/{len(dataset)}] save_path_masked_img: {save_path_masked_img}")
+    for idx, (key, image, original_prompt, editing_prompt, positive_prompts, negative_prompts) in enumerate(dataset):
+        entry = dataset.image_prompt[key]
+        # Get image path from dataset entry
+        image_path = os.path.join(dataset.image_dir, entry["image"])
+        save_path_mask = os.path.join(args.vis_save_path, f"{key}_{entry['image']}_mask.jpg")
+        save_path_masked_img =  os.path.join(args.vis_save_path, f"{key}_{entry['image']}_masked_img.jpg")
+        text_output = chat(args, model, clip_image_processor, transform, tokenizer, image_path, original_prompt, save_path_mask, save_path_masked_img)
+        print(f"\n[{idx+1}/{len(dataset)}] text_output: {text_output}, key:{key}, original_prompt: {original_prompt[:50]}...")
 
 if __name__ == "__main__":
     args = parse_args()

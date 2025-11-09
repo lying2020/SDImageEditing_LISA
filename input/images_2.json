@@ -1,14 +1,82 @@
 {
-  "cute_cat_and_girl.jpg": [
-    "Can you segment the cat in this image? Please output segmentation mask.",
-    "What is the cat in this image? Please output segmentation mask."
-  ],
-  "my_sister_and_brother.png": [
-    "Can you segment the child in this image? Please output segmentation mask.",
-    "What is the child in this image? Please output segmentation mask."
-  ],
-  "teeth_is_sick.jpg": [
-    "Can you segment the decayed tooth in this image? Please output segmentation mask.",
-    "What is the cavity in this image? Please output segmentation mask."
-  ]
+  "0": {
+    "image": "cute_cat_and_girl.jpg",
+    "seg_prompts": [
+      "Can you segment the cat in this image? Please output segmentation mask."
+    ],
+    "positive_prompts": [],
+    "negative_prompts": []
+  },
+  "1": {
+    "image": "cute_cat_and_girl.jpg",
+    "seg_prompts": [
+      "What is the cat in this image? Please output segmentation mask."
+    ],
+    "positive_prompts": [],
+    "negative_prompts": []
+  },
+  "2": {
+    "image": "my_sister_and_brother.png",
+    "seg_prompts": [
+      "Can you segment the child in this image? Please output segmentation mask."
+    ],
+    "positive_prompts": [],
+    "negative_prompts": []
+  },
+  "3": {
+    "image": "my_sister_and_brother.png",
+    "seg_prompts": [
+      "What is the child in this image? Please output segmentation mask."
+    ],
+    "positive_prompts": [],
+    "negative_prompts": []
+  },
+  "4": {
+    "image": "teeth_is_sick.jpg",
+    "seg_prompts": [
+      "Can you segment the decayed tooth in this image? Please output segmentation mask."
+    ],
+    "positive_prompts": [],
+    "negative_prompts": []
+  },
+  "5": {
+    "image": "teeth_is_sick.jpg",
+    "seg_prompts": [
+      "What is the cavity in this image? Please output segmentation mask."
+    ],
+    "positive_prompts": [],
+    "negative_prompts": []
+  },
+  "6": {
+    "image": "1393778776_cafef20eea_o.jpg",
+    "seg_prompts": [
+      "Can you segment the main subject in this image? Please output segmentation mask."
+    ],
+    "positive_prompts": [],
+    "negative_prompts": []
+  },
+  "7": {
+    "image": "1393778776_cafef20eea_o.jpg",
+    "seg_prompts": [
+      "What is the primary object in this image? Please output segmentation mask."
+    ],
+    "positive_prompts": [],
+    "negative_prompts": []
+  },
+  "8": {
+    "image": "a_woman_get_moon.jpg",
+    "seg_prompts": [
+      "Can you segment the house in this image? Please output segmentation mask."
+    ],
+    "positive_prompts": [],
+    "negative_prompts": []
+  },
+  "9": {
+    "image": "a_woman_get_moon.jpg",
+    "seg_prompts": [
+      "What is the house in this image? Please output segmentation mask."
+    ],
+    "positive_prompts": [],
+    "negative_prompts": []
+  }
 }

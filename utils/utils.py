@@ -72,22 +72,36 @@ class EditingJsonDataset(Dataset):
 
         self.image_dir = image_dir_path
         with open(json_file, 'r') as f:
-            self.image_prompt = json.load(f)
-            self.image_files = list(self.image_prompt.keys())*repeats
+            data = json.load(f)
         f.close()
+
+        # 新格式：{"0": {"image": "...", "seg_prompts": [...], "positive_prompts": [...], "negative_prompts": [...]}}
+        self.image_prompt = data
+        self.image_files = list(self.image_prompt.keys())*repeats
 
     def __len__(self):
         return len(self.image_files)
 
     def __getitem__(self, idx):
-        img_name = os.path.join(self.image_dir, self.image_files[idx])
+        key = self.image_files[idx]
+        entry = self.image_prompt[key]
+
+        # 新格式：{"0": {"image": "...", "seg_prompts": [...], "positive_prompts": [...], "negative_prompts": [...]}}
+        image_name = entry["image"]
+        # for segmentation
+        seg_prompts = entry.get("seg_prompts", [])
+        original_prompt = seg_prompts[0] if len(seg_prompts) > 0 else ""
+        editing_prompt = seg_prompts[1] if len(seg_prompts) > 1 else seg_prompts[0] if len(seg_prompts) > 0 else ""
+
+        # for impainting task
+        positive_prompts = entry.get("positive_prompts", [])
+        negative_prompts = entry.get("negative_prompts", [])
+
+        img_name = os.path.join(self.image_dir, image_name)
         image = Image.open(img_name)
 
-        original_prompt, editing_prompt = self.image_prompt[self.image_files[idx]][0], self.image_prompt[self.image_files[idx]][1]
-
-        return image, original_prompt, editing_prompt
-
-
+        # 返回: key, image, original_prompt, editing_prompt, positive_prompts, negative_prompts
+        return key, image, original_prompt, editing_prompt, positive_prompts, negative_prompts
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
