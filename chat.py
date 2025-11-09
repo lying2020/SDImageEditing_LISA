@@ -33,14 +33,14 @@ from utils.utils import (DEFAULT_IM_END_TOKEN, DEFAULT_IM_START_TOKEN,
 
 from utils.utils import EditingJsonDataset
 import project
-from project import LISA_7B_MODEL_PATH, LISA_13B_MODEL_PATH, VIS_OUTPUT_DIR, INPUT_IMAGES_JSON_FILE, INPUT_IMAGES_2_JSON_FILE
+from project import LISA_7B_MODEL_PATH, LISA_13B_MODEL_PATH, OUTPUT_DIR, VIS_OUTPUT_DIR, INPUT_IMAGES_JSON_FILE, INPUT_IMAGES_2_JSON_FILE
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="LISA chat")
     parser.add_argument("--version", default=LISA_13B_MODEL_PATH)
     parser.add_argument("--input_images_json_file", default=INPUT_IMAGES_2_JSON_FILE, help="JSON file to load input images")
-    parser.add_argument("--vis_save_path", default=VIS_OUTPUT_DIR, help="Directory to save visualization results")
+    parser.add_argument("--vis_save_path", default=OUTPUT_DIR, help="Directory to save visualization results")
     parser.add_argument("--precision", default="bf16", type=str, choices=["fp32", "bf16", "fp16"], help="precision for inference")
     parser.add_argument("--image_size", default=1024, type=int, help="image size")
     parser.add_argument("--model_max_length", default=512, type=int)
@@ -161,7 +161,6 @@ def chat(args, model, clip_image_processor, transform, tokenizer, image_path, pr
     return text_output, save_path_mask, save_path_masked_img
 
 def main(args):
-    os.makedirs(args.vis_save_path, exist_ok=True)
 
     # Create model
     tokenizer = AutoTokenizer.from_pretrained(args.version, cache_dir=None, model_max_length=args.model_max_length, padding_side="right", use_fast=False)
@@ -269,6 +268,10 @@ def main(args):
     clip_image_processor = CLIPImageProcessor.from_pretrained(model.config.vision_tower)
     transform = ResizeLongestSide(args.image_size)
     model.eval()
+
+    json_file_name_without_ext = os.path.splitext(os.path.basename(args.input_images_json_file))[0]
+    args.vis_save_path = os.path.join(args.vis_save_path, json_file_name_without_ext)
+    os.makedirs(args.vis_save_path, exist_ok=True)
 
     # Set required args for EditingJsonDataset
     dataset = EditingJsonDataset(args.input_images_json_file)
