@@ -39,12 +39,13 @@ os.makedirs(CHECKPOINTS_DIR, exist_ok=True)
 INPUT_DIR = os.path.join(current_dir, "input")
 os.makedirs(INPUT_DIR, exist_ok=True)
 
-INPUT_IMAGES_DIR = os.path.join(INPUT_DIR, "images")
-os.makedirs(INPUT_IMAGES_DIR, exist_ok=True)
-
-INPUT_IMAGES_JSON_FILE = os.path.join(INPUT_DIR, "images.json")
+INPUT_IMAGES_JSON_FILE = os.path.join(INPUT_DIR, "images_1.json")
 if not os.path.exists(INPUT_IMAGES_JSON_FILE):
     raise FileNotFoundError(f"Input images JSON file not found at {INPUT_IMAGES_JSON_FILE}")
+
+INPUT_IMAGES_2_JSON_FILE = os.path.join(INPUT_DIR, "images_2.json")
+if not os.path.exists(INPUT_IMAGES_2_JSON_FILE):
+    raise FileNotFoundError(f"Input images JSON file not found at {INPUT_IMAGES_2_JSON_FILE}")
 
 # result path
 OUTPUT_DIR = os.path.join(current_dir, "output")

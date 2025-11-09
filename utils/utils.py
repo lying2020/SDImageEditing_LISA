@@ -58,9 +58,20 @@ class Summary(Enum):
 
 
 class EditingJsonDataset(Dataset):
-    def __init__(self, args, repeats=1):
-        self.image_dir = args.image_dir_path
-        with open(args.json_file, 'r') as f:
+    def __init__(self, json_file, image_dir_path=None, repeats=1):
+        if image_dir_path is None:
+            # 使用json_file去掉后缀的文件名作为图片路径
+            # 例如: input/images.json -> input/images
+            json_file_dir = os.path.dirname(json_file)
+            json_file_name = os.path.basename(json_file)
+            json_file_name_without_ext = os.path.splitext(json_file_name)[0]
+            if json_file_dir:
+                image_dir_path = os.path.join(json_file_dir, json_file_name_without_ext)
+            else:
+                image_dir_path = json_file_name_without_ext
+
+        self.image_dir = image_dir_path
+        with open(json_file, 'r') as f:
             self.image_prompt = json.load(f)
             self.image_files = list(self.image_prompt.keys())*repeats
         f.close()

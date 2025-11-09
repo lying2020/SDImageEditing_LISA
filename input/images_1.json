@@ -54,17 +54,5 @@
   "wash_hands.jpg": [
     "Where to wash hands in this image? Please output segmentation mask.",
     "Can you segment the place where you can wash hands in this image? Please output segmentation mask."
-  ],
-  "cute_cat_and_girl.jpg": [
-    "Can you segment the cat in this image? Please output segmentation mask.",
-    "What is the cat in this image? Please output segmentation mask."
-  ],
-  "my_sister_and_brother.png": [
-    "Can you segment the child in this image? Please output segmentation mask.",
-    "What is the child in this image? Please output segmentation mask."
-  ],
-  "teeth_is_sick.jpg": [
-    "Can you segment the decayed tooth in this image? Please output segmentation mask.",
-    "What is the cavity in this image? Please output segmentation mask."
   ]
 }

@@ -33,14 +33,13 @@ from utils.utils import (DEFAULT_IM_END_TOKEN, DEFAULT_IM_START_TOKEN,
 
 from utils.utils import EditingJsonDataset
 import project
-from project import LISA_7B_MODEL_PATH, LISA_13B_MODEL_PATH, VIS_OUTPUT_DIR, INPUT_IMAGES_DIR, INPUT_IMAGES_JSON_FILE
+from project import LISA_7B_MODEL_PATH, LISA_13B_MODEL_PATH, VIS_OUTPUT_DIR, INPUT_IMAGES_JSON_FILE, INPUT_IMAGES_2_JSON_FILE
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="LISA chat")
     parser.add_argument("--version", default=LISA_13B_MODEL_PATH)
-    parser.add_argument("--input_images_dir", default=INPUT_IMAGES_DIR, help="Directory to load input images")
-    parser.add_argument("--input_images_json_file", default=INPUT_IMAGES_JSON_FILE, help="JSON file to load input images")
+    parser.add_argument("--input_images_json_file", default=INPUT_IMAGES_2_JSON_FILE, help="JSON file to load input images")
     parser.add_argument("--vis_save_path", default=VIS_OUTPUT_DIR, help="Directory to save visualization results")
     parser.add_argument("--precision", default="bf16", type=str, choices=["fp32", "bf16", "fp16"], help="precision for inference")
     parser.add_argument("--image_size", default=1024, type=int, help="image size")
@@ -272,12 +271,10 @@ def main(args):
     model.eval()
 
     # Set required args for EditingJsonDataset
-    args.image_dir_path = args.input_images_dir
-    args.json_file = args.input_images_json_file
-    dataset = EditingJsonDataset(args)
+    dataset = EditingJsonDataset(args.input_images_json_file)
     for idx, (image, original_prompt, editing_prompt) in enumerate(dataset):
         # Get image path from dataset
-        image_path = os.path.join(args.input_images_dir, dataset.image_files[idx])
+        image_path = os.path.join(dataset.image_dir, dataset.image_files[idx])
         text_output, save_path_mask, save_path_masked_img = chat(args, model, clip_image_processor, transform, tokenizer, image_path, original_prompt)
         print(f"\n[{idx+1}/{len(dataset)}] text_output: {text_output}")
         print(f"[{idx+1}/{len(dataset)}] save_path_mask: {save_path_mask}")
