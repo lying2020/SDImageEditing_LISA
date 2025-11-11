@@ -2,7 +2,7 @@
   "0": {
     "image": "cute_cat_and_girl.jpg",
     "seg_prompts": [
-      "Can you segment the cat in this image? Please output segmentation mask."
+      "Can you segment the dog in this image? Please output segmentation mask."
     ],
     "positive_prompts": [],
     "negative_prompts": []
@@ -75,6 +75,38 @@
     "image": "a_woman_get_moon.jpg",
     "seg_prompts": [
       "What is the house in this image? Please output segmentation mask."
+    ],
+    "positive_prompts": [],
+    "negative_prompts": []
+  },
+  "10": {
+    "image": "public_bus.png",
+    "seg_prompts": [
+      "Can you segment the public bus in this image? Please output segmentation mask."
+    ],
+    "positive_prompts": [],
+    "negative_prompts": []
+  },
+  "11": {
+    "image": "cat_and_dogs.png",
+    "seg_prompts": [
+      "What is the cat at the right side in this image? Please output segmentation mask."
+    ],
+    "positive_prompts": [],
+    "negative_prompts": []
+  },
+  "12": {
+    "image": "bowl_and_corn.png",
+    "seg_prompts": [
+      "Can you segment the bowl of salad in this image? Please output segmentation mask."
+    ],
+    "positive_prompts": [],
+    "negative_prompts": []
+  },
+  "13": {
+    "image": "bowl_and_rice.png",
+    "seg_prompts": [
+      "What is the the bowl of salad in this image? Please output segmentation mask."
     ],
     "positive_prompts": [],
     "negative_prompts": []

@@ -277,8 +277,8 @@ def main(args):
         entry = dataset.image_prompt[key]
         # Get image path from dataset entry
         image_path = os.path.join(dataset.image_dir, entry["image"])
-        save_path_mask = os.path.join(args.vis_save_path, f"{key}_{entry['image']}_mask.jpg")
-        save_path_masked_img =  os.path.join(args.vis_save_path, f"{key}_{entry['image']}_masked_img.jpg")
+        save_path_mask = os.path.join(args.vis_save_path, f"{key}_mask_{entry['image']}")
+        save_path_masked_img =  os.path.join(args.vis_save_path, f"{key}_masked_img_{entry['image']}")
         text_output = chat(args, model, clip_image_processor, transform, tokenizer, image_path, original_prompt, save_path_mask, save_path_masked_img)
         print(f"\n[{idx+1}/{len(dataset)}] text_output: {text_output}, key:{key}, original_prompt: {original_prompt[:50]}...")
 

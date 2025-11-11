@@ -1,7 +1,7 @@
 #!/bin/bash
 # Conda环境设置脚本
 
-ENV_NAME="lisa"
+ENV_NAME="sd_impainting"
 PYTHON_VERSION="3.10"
 CUDA_VERSION="11.7"  # 或 "12.1"
 
@@ -43,7 +43,7 @@ conda install -c conda-forge bitsandbytes -y || pip install bitsandbytes
 
 # 安装其他依赖
 echo "5. 安装其他依赖..."
-pip install transformers accelerate opencv-python numpy
+# pip install transformers accelerate opencv-python numpy
 
 echo ""
 echo "=========================================="
